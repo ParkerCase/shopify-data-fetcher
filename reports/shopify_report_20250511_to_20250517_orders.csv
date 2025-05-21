@@ -1,0 +1,5 @@
+id,order_number,created_at,customer_name,customer_email,financial_status,fulfillment_status,total_price,currency,item_count
+6176103923778,1547,2025-05-17 20:07:53+00:00,Mitchell Bennett,mitchellab55@gmail.com,paid,,379.90,USD,2
+6175684689986,1546,2025-05-17 16:44:31+00:00,Jon J Thomas,jt@spider-bite.com,paid,,484.90,USD,2
+6173762617410,1545,2025-05-16 22:01:10+00:00,Brooklyn Hensley,Brooklyn@Tatt2Away.com,paid,,0.00,USD,8
+6168441946178,1544,2025-05-13 20:19:59+00:00,Melissa Maine,melissamaine@sbcglobal.net,paid,,292.40,USD,3

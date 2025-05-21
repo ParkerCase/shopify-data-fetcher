@@ -1,0 +1,5 @@
+id,first_name,last_name,email,phone,orders_count,total_spent,created_at,updated_at,tags,verified_email,ordered_this_week
+2787472965698,Mitchell,Bennett,mitchellab55@gmail.com,+15869444249,0,0.0,2019-12-12 23:10:50+00:00,2025-05-17 20:07:59+00:00,,True,True
+7251546308674,Jon,J Thomas,jt@spider-bite.com,+16036613449,0,0.0,2024-11-20 22:08:08+00:00,2025-05-17 16:44:37+00:00,"Login with Shop, Shop",True,True
+7481237798978,Brooklyn,Hensley,Brooklyn@Tatt2Away.com,+13046172750,0,0.0,2025-03-04 01:15:52+00:00,2025-05-16 22:01:11+00:00,,True,True
+6749910761538,Melissa,Maine,melissamaine@sbcglobal.net,+17753781224,0,0.0,2024-04-26 19:51:50+00:00,2025-05-13 20:20:00+00:00,"Login with Shop, Shop",True,True

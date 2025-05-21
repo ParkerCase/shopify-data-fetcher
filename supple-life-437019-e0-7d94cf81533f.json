@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "supple-life-437019-e0",
+  "private_key_id": "7d94cf81533f0ea66eea4e1417c41d7bc01a6043",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCrFPjr26rG0WpR\nnCLVXhWVOB3dxDoYaEKsihO6f5LHy0WrsAz0zkLTVqYfXsMQxsSSxF6tn+uM4JgO\nWBuhTkSWyTo8WZDKGVISwTTep4GWeosd3xGuj3WUPCv8F4v+gEzt7ijoUAddlzkf\nWwjBny20fQ3x3VW4sq4yKOUTlQgwph/POTAnQoOO9HMlLLoPGiYjWr7RJ9QavKHE\nrwzbhGHOS6UPYV4JSvL7N2NSeb5xet8RT96HroCLc++T7aTp4uoM9MJ0sZFe9wGh\nGzC5xYt0Ir3ogJX80qkCnvCf9ZvN1OSZTlftv5KqArV8ECjyHIvi6ySDkymvvd8g\nOCKRqyr1AgMBAAECggEAFFnmUohLBGOc9iBQtHkAsEOAqgTRtF2SsNusBR9v4nx3\nyTikEesHYASKtmibY7+BWsQpTxYa+yMsc2hfwQyCdD1zxAITizb/4GNDWskqTTA+\npEsI228NWZje0poqeRfiDtup2hjLB4MZtHUr0XyR/0pxAjiGHfaDakwbE/1CgCbQ\nicnfhFJf5vchcxgFG2yY1qRiac4nn99++zHd0E9tisNwDseIfSy10U7xBomdaBu8\nsnBuN15v/uRRJI8wySXG5f6dnYG1CzHcOI+xFyE82tXRr1wZ5alKYiaVrHlwQnLk\nS8qhuPoMBnTbsyf6ebQvs4WfA8IRdcUIC89VR9b+8QKBgQDx4HUCwiC0JIr/7Slx\nEta0uMl6WITTyOkcKp9w2BDmkXYqz1hC/KnMMRXEfiDTTyMdFk2LdMw6KtkPjenE\nxNGUPthFAt10i/Ezk0kMpdoq/Kb9N0+NNx6MqqtY2Iwv8VyuJA7IQEYlpUKhZTFF\nd4JrOo/3lb7a+W20+XX9b5UQiwKBgQC1EkhnP4EH+7dTnzSI1ud9ZOEX3zOzi4R8\ntok0s4zFYMqdP2Rq4vPNqxuiEIzNp8GZUnNlE0Gny4NcxtM7a+mI6FTaCr3UrxGl\nQZNNOpdQTvCi9+4i2loiiQtfdgEbFcQK5Kr0kRxEJwDk7za1ME1flWX+hHOYJE1Y\nwLhjrsCifwKBgQCASsaljOQdyJg1gMyPXielubGcBCGH17PVLcJd7yyfrx3XPR0a\ngrtpQ8vA6gltKzd7sR22T2AXpix1dJc+uApVsDOz/v4JWES6T2/alomubU4BVvoJ\n8+dvQwMZX9qTf1jiQNvaWUUbqJk709mbd/Uj/O7pqnKN4OjQqdRsdWfCWwKBgFmM\nSChfnJVxJDIDyzxdY7B84mEm7m+98PCoaWSZ42V9v9ZSknvV75LoK0tT+f5/F1yX\nDSCQjGjKWhXY8oAxlxYxKD2JEGaNiiF7M7j+3/REhfdiu++aovbvZaN5PYTCl+h3\nPCClXyBJVcTilOC4mZtKzF057dzxHxtkfAw4UWZLAoGAWYz1RPzSM1Ge+0AVisXW\n5Pe+C0Z2WUKcfeOXVCalfTank0Mtt2jp4h4/t8Zqeyt/9lQYM2TX2D2IAO9Hy7a7\nJeV/YPQNGLpOA37LVDO2v9wkAihFn0kqdXkbq20thx0ZW+oSCuAzHLtUYnRN4EBW\nmtLOurIp4tlcGYEJIusm7Ew=\n-----END PRIVATE KEY-----\n",
+  "client_email": "shopify-sheetsbot@supple-life-437019-e0.iam.gserviceaccount.com",
+  "client_id": "106833171818266117501",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/shopify-sheetsbot%40supple-life-437019-e0.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
