@@ -2,8 +2,8 @@ name: Weekly Shopify Report
 
 on:
   schedule:
-    # Run every Monday at 1:00 AM UTC (7:00 PM Sunday Mountain Time)
-    - cron: '0 1 * * 1'
+    # Run every Monday at 12:00 AM Mountain Time
+    - cron: '0 7 * * 1'
   workflow_dispatch:  # Allow manual trigger from GitHub UI
 
 jobs:

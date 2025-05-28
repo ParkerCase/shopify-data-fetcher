@@ -1,0 +1,3 @@
+id,order_number,created_at,customer_name,customer_email,financial_status,fulfillment_status,total_price,currency,item_count
+6182421332034,1551,2025-05-21 18:06:19+00:00,Luisa Pena Ortiz,luisa@tatt2away.com,paid,,0.00,USD,10
+6182257819714,1550,2025-05-21 16:26:21+00:00,Crystal Schrader,cschrader@cvmspc.com,paid,,342.50,USD,2
