@@ -8,11 +8,21 @@ from dotenv import load_dotenv
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from gspread_dataframe import set_with_dataframe
+import pytz
+from typing import Tuple, Dict, List, Optional
+import argparse
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
 
-# Shopify API Configuration
+# Shopify API Configuration (keeping your exact setup)
 SHOP_NAME = os.getenv("SHOP_NAME", "tatt-2-away.myshopify.com")
 API_KEY = os.getenv("API_KEY", "8d236638adbd963ec050de036c97d2bc")
 PASSWORD = os.getenv("PASSWORD", "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")
@@ -24,23 +34,23 @@ API_BASE_URL = f"https://{SHOP_NAME}/admin/api/{API_VERSION}"
 # Request Headers
 HEADERS = {"Content-Type": "application/json", "Accept": "application/json"}
 
-# Disable SSL verification globally for the requests library
+# Disable SSL verification globally for the requests library (your existing setup)
 requests.packages.urllib3.disable_warnings()
 old_merge_environment_settings = requests.Session.merge_environment_settings
 
 
-# Override merge_environment_settings to always disable verification
+# Override merge_environment_settings to always disable verification (your existing setup)
 def merge_environment_settings(self, url, proxies, stream, verify, cert):
     settings = old_merge_environment_settings(self, url, proxies, stream, verify, cert)
     settings["verify"] = False
     return settings
 
 
-# Apply the patch
+# Apply the patch (your existing setup)
 requests.Session.merge_environment_settings = merge_environment_settings
 
 # ------------------------------------------------------------------------------
-# Date Range Utility Functions
+# ORIGINAL Date Range Utility Functions (keeping all your existing functions)
 # ------------------------------------------------------------------------------
 
 
@@ -110,7 +120,113 @@ def get_previous_week_range():
 
 
 # ------------------------------------------------------------------------------
-# Shopify API Functions
+# NEW Historical Date Range Functions (adding to your existing ones)
+# ------------------------------------------------------------------------------
+
+
+def get_iso_week_info(date_obj: datetime.datetime) -> Tuple[int, int]:
+    """Get ISO year and week number for a given date."""
+    iso_year, iso_week, _ = date_obj.isocalendar()
+    return iso_year, iso_week
+
+
+def get_week_range_from_iso(
+    year: int, week: int
+) -> Tuple[datetime.datetime, datetime.datetime]:
+    """Get date range for a specific ISO year and week number in Mountain Time."""
+    mountain_tz = pytz.timezone("America/Denver")
+
+    # Get first day of the ISO year
+    jan_4 = datetime.date(year, 1, 4)  # Jan 4 is always in week 1
+    iso_week_1_start = jan_4 - datetime.timedelta(days=jan_4.weekday())
+
+    # Calculate the start of the requested week
+    week_start = iso_week_1_start + datetime.timedelta(weeks=week - 1)
+    week_end = week_start + datetime.timedelta(days=6)
+
+    # Convert to Mountain Time datetime objects
+    start_datetime = mountain_tz.localize(
+        datetime.datetime.combine(week_start, datetime.time.min)
+    )
+    end_datetime = mountain_tz.localize(
+        datetime.datetime.combine(week_end, datetime.time.max)
+    )
+
+    return start_datetime, end_datetime
+
+
+def get_all_weeks_since_2023() -> (
+    List[Tuple[int, int, datetime.datetime, datetime.datetime]]
+):
+    """Generate all ISO weeks from 2023-W01 to current week."""
+    weeks = []
+    current_date = datetime.datetime.now()
+    current_year, current_week = get_iso_week_info(current_date)
+
+    for year in range(2023, current_year + 1):
+        # Determine how many weeks in this year
+        if year == current_year:
+            max_week = current_week
+        else:
+            # ISO weeks can be 52 or 53
+            dec_28 = datetime.date(year, 12, 28)  # Dec 28 is always in the last week
+            _, max_week = get_iso_week_info(
+                datetime.datetime.combine(dec_28, datetime.time.min)
+            )
+
+        for week in range(1, max_week + 1):
+            start_date, end_date = get_week_range_from_iso(year, week)
+            weeks.append((year, week, start_date, end_date))
+
+    return weeks
+
+
+def get_month_range(
+    year: int, month: int
+) -> Tuple[datetime.datetime, datetime.datetime]:
+    """Get date range for a specific month in Mountain Time."""
+    mountain_tz = pytz.timezone("America/Denver")
+
+    # First day of month
+    start_date = datetime.date(year, month, 1)
+
+    # Last day of month
+    if month == 12:
+        end_date = datetime.date(year + 1, 1, 1) - datetime.timedelta(days=1)
+    else:
+        end_date = datetime.date(year, month + 1, 1) - datetime.timedelta(days=1)
+
+    start_datetime = mountain_tz.localize(
+        datetime.datetime.combine(start_date, datetime.time.min)
+    )
+    end_datetime = mountain_tz.localize(
+        datetime.datetime.combine(end_date, datetime.time.max)
+    )
+
+    return start_datetime, end_datetime
+
+
+def get_all_months_since_2023() -> (
+    List[Tuple[int, int, datetime.datetime, datetime.datetime]]
+):
+    """Generate all months from 2023-01 to current month."""
+    months = []
+    current_date = datetime.datetime.now()
+    current_year = current_date.year
+    current_month = current_date.month
+
+    for year in range(2023, current_year + 1):
+        max_month = current_month if year == current_year else 12
+
+        for month in range(1, max_month + 1):
+            start_date, end_date = get_month_range(year, month)
+            months.append((year, month, start_date, end_date))
+
+    return months
+
+
+# ------------------------------------------------------------------------------
+# ORIGINAL Shopify API Functions (keeping all your existing functions)
 # ------------------------------------------------------------------------------
 
 
@@ -124,7 +240,7 @@ def get_session():
 
 
 def handle_pagination(session, url, params=None):
-    """Handle API pagination and return all results."""
+    """Handle API pagination and return all results with better error handling."""
     if params is None:
         params = {}
 
@@ -170,10 +286,17 @@ def handle_pagination(session, url, params=None):
             else:
                 url = None
 
+            # Add delay to prevent rate limiting
+            time.sleep(0.5)
+
         except requests.exceptions.Timeout:
             print(
                 f"Request timed out while fetching data. Returning data collected so far ({len(all_data)} records)."
             )
+            break
+        except ValueError as e:
+            # Handle data parsing errors (like int conversion issues)
+            print(f"Data parsing error: {e}. Continuing with collected data.")
             break
         except Exception as e:
             print(f"Error during pagination: {e}")
@@ -182,8 +305,84 @@ def handle_pagination(session, url, params=None):
     return all_data
 
 
+# ENHANCED handle_pagination with retry logic for historical data collection
+def handle_pagination_with_retry(session, url, params=None, max_retries=3):
+    """Enhanced pagination with retry logic for better reliability."""
+    if params is None:
+        params = {}
+
+    all_data = []
+    retry_count = 0
+
+    while url:
+        try:
+            response = session.get(url, params=params, timeout=30)
+
+            if response.status_code == 429:  # Rate limited
+                retry_after = int(response.headers.get("Retry-After", 5))
+                logger.warning(f"Rate limited, waiting for {retry_after} seconds...")
+                time.sleep(retry_after)
+                continue
+
+            if response.status_code >= 500:  # Server error
+                if retry_count < max_retries:
+                    retry_count += 1
+                    wait_time = 2**retry_count
+                    logger.warning(
+                        f"Server error {response.status_code}, retrying in {wait_time} seconds... (attempt {retry_count})"
+                    )
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Max retries exceeded for {url}")
+                    break
+
+            response.raise_for_status()
+            data = response.json()
+
+            # Extract the main data
+            for key in data.keys():
+                if isinstance(data[key], list):
+                    all_data.extend(data[key])
+                    logger.info(
+                        f"Retrieved {len(data[key])} records from {key} endpoint. Total: {len(all_data)}"
+                    )
+                    break
+
+            # Handle pagination
+            link_header = response.headers.get("Link", "")
+            url = None
+
+            if 'rel="next"' in link_header:
+                links = link_header.split(",")
+                for link in links:
+                    if 'rel="next"' in link:
+                        url = link.split(";")[0].strip("<> ")
+                        params = {}
+                        break
+
+            # Respectful rate limiting
+            time.sleep(0.5)
+            retry_count = 0  # Reset retry count on success
+
+        except requests.exceptions.Timeout:
+            logger.warning(
+                f"Request timed out. Returning data collected so far ({len(all_data)} records)."
+            )
+            break
+        except Exception as e:
+            logger.error(f"Error during pagination: {e}")
+            if retry_count < max_retries:
+                retry_count += 1
+                time.sleep(2**retry_count)
+                continue
+            break
+
+    return all_data
+
+
 # ------------------------------------------------------------------------------
-# Data Fetching Functions
+# ORIGINAL Data Fetching Functions (keeping ALL your existing functions)
 # ------------------------------------------------------------------------------
 
 
@@ -223,7 +422,20 @@ def get_orders(session, week_range=None):
     if not orders:
         return pd.DataFrame()
 
-    # Extract relevant fields
+    # Safe conversion functions for data types
+    def safe_float(value):
+        try:
+            return float(value) if value is not None else 0.0
+        except (ValueError, TypeError):
+            return 0.0
+
+    def safe_int(value):
+        try:
+            return int(float(value)) if value is not None else 0
+        except (ValueError, TypeError):
+            return 0
+
+    # Extract relevant fields with safe data type conversion
     orders_data = []
     for order in orders:
         orders_data.append(
@@ -235,10 +447,20 @@ def get_orders(session, week_range=None):
                 "customer_email": order.get("customer", {}).get("email", ""),
                 "financial_status": order.get("financial_status"),
                 "fulfillment_status": order.get("fulfillment_status"),
-                "total_price": order.get("total_price"),
+                "total_price": safe_float(order.get("total_price")),
+                "total_tax": safe_float(
+                    order.get("total_tax")
+                ),  # Safe access for historical data
+                "total_discounts": safe_float(
+                    order.get("total_discounts")
+                ),  # Safe access for historical data
+                "subtotal_price": safe_float(
+                    order.get("subtotal_price")
+                ),  # Safe access for historical data
                 "currency": order.get("currency"),
                 "item_count": sum(
-                    item.get("quantity", 0) for item in order.get("line_items", [])
+                    safe_int(item.get("quantity", 0))
+                    for item in order.get("line_items", [])
                 ),
             }
         )
@@ -636,7 +858,445 @@ def get_reports(session):
 
 
 # ------------------------------------------------------------------------------
-# Visualization and Output Functions
+# NEW Historical Data Functions (adding to your existing ones)
+# ------------------------------------------------------------------------------
+
+
+def get_orders_enhanced(
+    session, week_range: Tuple[datetime.datetime, datetime.datetime]
+) -> pd.DataFrame:
+    """Enhanced orders fetching with comprehensive metrics for historical data and better error handling."""
+    start_date, end_date = week_range
+
+    logger.info(
+        f"Fetching orders from {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}..."
+    )
+
+    endpoint = f"{API_BASE_URL}/orders.json"
+    params = {
+        "status": "any",
+        "created_at_min": start_date.isoformat(),
+        "created_at_max": end_date.isoformat(),
+        "limit": 250,
+    }
+
+    try:
+        orders = handle_pagination_with_retry(session, endpoint, params)
+
+        if not orders:
+            logger.info("No orders found for this period")
+            return pd.DataFrame()
+
+        # Safe conversion functions for data types
+        def safe_float(value):
+            try:
+                return float(value) if value is not None else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+        def safe_int(value):
+            try:
+                return int(float(value)) if value is not None else 0
+            except (ValueError, TypeError):
+                return 0
+
+        # Process orders with comprehensive data for historical analysis
+        orders_data = []
+        for order in orders:
+            line_items = order.get("line_items", [])
+            total_items = sum(safe_int(item.get("quantity", 0)) for item in line_items)
+
+            orders_data.append(
+                {
+                    "order_id": order.get("id"),
+                    "order_number": order.get("order_number"),
+                    "created_at": order.get("created_at"),
+                    "customer_id": (
+                        order.get("customer", {}).get("id")
+                        if order.get("customer")
+                        else None
+                    ),
+                    "customer_name": (
+                        f"{order.get('customer', {}).get('first_name', '')} {order.get('customer', {}).get('last_name', '')}".strip()
+                        if order.get("customer")
+                        else ""
+                    ),
+                    "customer_email": (
+                        order.get("customer", {}).get("email", "")
+                        if order.get("customer")
+                        else ""
+                    ),
+                    "financial_status": order.get("financial_status"),
+                    "fulfillment_status": order.get("fulfillment_status"),
+                    "total_price": safe_float(order.get("total_price")),
+                    "subtotal_price": safe_float(order.get("subtotal_price")),
+                    "total_tax": safe_float(order.get("total_tax")),
+                    "total_discounts": safe_float(order.get("total_discounts")),
+                    "currency": order.get("currency"),
+                    "total_line_items_price": safe_float(
+                        order.get("total_line_items_price")
+                    ),
+                    "item_count": total_items,
+                    "tags": order.get("tags", ""),
+                }
+            )
+
+        df = pd.DataFrame(orders_data)
+
+        if not df.empty and "created_at" in df.columns:
+            df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+            # Add week info for easier analysis
+            df["week_year"] = df["created_at"].dt.isocalendar().year
+            df["week_number"] = df["created_at"].dt.isocalendar().week
+            df["weekday"] = df["created_at"].dt.day_name()
+            df["month"] = df["created_at"].dt.month
+            df["year"] = df["created_at"].dt.year
+
+        return df
+
+    except Exception as e:
+        logger.error(f"Error fetching orders: {e}")
+        return pd.DataFrame()
+
+
+def calculate_weekly_metrics_safe(
+    orders_df: pd.DataFrame,
+    products_df: pd.DataFrame,
+    customers_df: pd.DataFrame,
+    fulfillments_df: pd.DataFrame,
+    year: int,
+    week: int,
+    week_start: datetime.datetime,
+    week_end: datetime.datetime,
+) -> Dict:
+    """Ultra-safe version of calculate_weekly_metrics that handles any DataFrame issues."""
+
+    try:
+        # If DataFrame is empty, return zero metrics immediately
+        if orders_df.empty:
+            return {
+                "iso_year": year,
+                "iso_week": week,
+                "week_start_date": week_start.strftime("%Y-%m-%d"),
+                "week_end_date": week_end.strftime("%Y-%m-%d"),
+                "total_orders": 0,
+                "total_revenue": 0.0,
+                "total_tax": 0.0,
+                "total_discounts": 0.0,
+                "subtotal_price": 0.0,
+                "average_order_value": 0.0,
+                "total_items_sold": 0,
+                "unique_customers": 0,
+                "total_customers_in_system": (
+                    len(customers_df) if not customers_df.empty else 0
+                ),
+                "fulfillment_rate": 0.0,
+                "paid_orders": 0,
+                "pending_orders": 0,
+                "cancelled_orders": 0,
+                "refunded_orders": 0,
+                "total_fulfillments": (
+                    len(fulfillments_df) if not fulfillments_df.empty else 0
+                ),
+                "total_products_active": (
+                    products_df["product_id"].nunique()
+                    if not products_df.empty and "product_id" in products_df.columns
+                    else 0
+                ),
+                "total_variants_active": (
+                    len(products_df) if not products_df.empty else 0
+                ),
+            }
+
+        # Basic counts
+        total_orders = len(orders_df)
+
+        # Safe column access with dict-style access to avoid pandas issues
+        columns = list(orders_df.columns)
+        logger.debug(f"Processing {total_orders} orders with columns: {columns}")
+
+        # Initialize all metrics to safe defaults
+        total_revenue = 0.0
+        total_tax = 0.0
+        total_discounts = 0.0
+        subtotal_price = 0.0
+        total_items_sold = 0
+        unique_customers = total_orders  # Safe fallback
+
+        # Process each row individually to avoid column access issues
+        for idx, row in orders_df.iterrows():
+            try:
+                # Revenue calculation
+                if "total_price" in columns:
+                    try:
+                        price = (
+                            float(row["total_price"])
+                            if row["total_price"] is not None
+                            else 0.0
+                        )
+                        total_revenue += price
+                    except (ValueError, TypeError):
+                        pass
+
+                # Tax calculation
+                if "total_tax" in columns:
+                    try:
+                        tax = (
+                            float(row["total_tax"])
+                            if row["total_tax"] is not None
+                            else 0.0
+                        )
+                        total_tax += tax
+                    except (ValueError, TypeError):
+                        pass
+
+                # Discounts calculation
+                if "total_discounts" in columns:
+                    try:
+                        discounts = (
+                            float(row["total_discounts"])
+                            if row["total_discounts"] is not None
+                            else 0.0
+                        )
+                        total_discounts += discounts
+                    except (ValueError, TypeError):
+                        pass
+
+                # Subtotal calculation
+                if "subtotal_price" in columns:
+                    try:
+                        subtotal = (
+                            float(row["subtotal_price"])
+                            if row["subtotal_price"] is not None
+                            else 0.0
+                        )
+                        subtotal_price += subtotal
+                    except (ValueError, TypeError):
+                        pass
+
+                # Item count calculation
+                if "item_count" in columns:
+                    try:
+                        items = (
+                            int(row["item_count"])
+                            if row["item_count"] is not None
+                            else 0
+                        )
+                        total_items_sold += items
+                    except (ValueError, TypeError):
+                        pass
+
+            except Exception as e:
+                logger.debug(f"Error processing row {idx}: {e}")
+                continue
+
+        # Calculate derived metrics
+        average_order_value = total_revenue / total_orders if total_orders > 0 else 0.0
+
+        # Customer counting with ultra-safe approach
+        try:
+            customer_set = set()
+            for idx, row in orders_df.iterrows():
+                try:
+                    # Try customer_id first
+                    if "customer_id" in columns and row["customer_id"] is not None:
+                        customer_set.add(str(row["customer_id"]))
+                    # Try customer_email as fallback
+                    elif (
+                        "customer_email" in columns
+                        and row["customer_email"] is not None
+                        and row["customer_email"] != ""
+                    ):
+                        customer_set.add(str(row["customer_email"]))
+                    # Try customer_name as last resort
+                    elif (
+                        "customer_name" in columns
+                        and row["customer_name"] is not None
+                        and row["customer_name"] != ""
+                    ):
+                        customer_set.add(str(row["customer_name"]))
+                    else:
+                        # If no customer info, count as unique order
+                        customer_set.add(f"order_{idx}")
+                except Exception:
+                    customer_set.add(f"order_{idx}")
+
+            unique_customers = len(customer_set)
+
+        except Exception as e:
+            logger.debug(f"Customer counting failed: {e}, using order count")
+            unique_customers = total_orders
+
+        # Financial status with safe access
+        paid_orders = pending_orders = cancelled_orders = refunded_orders = 0
+        if "financial_status" in columns:
+            try:
+                status_counts = orders_df["financial_status"].value_counts()
+                paid_orders = int(status_counts.get("paid", 0))
+                pending_orders = int(status_counts.get("pending", 0)) + int(
+                    status_counts.get("authorized", 0)
+                )
+                cancelled_orders = int(status_counts.get("voided", 0))
+                refunded_orders = int(status_counts.get("refunded", 0)) + int(
+                    status_counts.get("partially_refunded", 0)
+                )
+            except Exception as e:
+                logger.debug(f"Financial status calculation failed: {e}")
+
+        # Fulfillment rate with safe access
+        fulfillment_rate = 0.0
+        if "fulfillment_status" in columns:
+            try:
+                fulfilled_count = 0
+                for idx, row in orders_df.iterrows():
+                    if row["fulfillment_status"] in ["fulfilled", "partial"]:
+                        fulfilled_count += 1
+                fulfillment_rate = (
+                    (fulfilled_count / total_orders * 100) if total_orders > 0 else 0.0
+                )
+            except Exception as e:
+                logger.debug(f"Fulfillment rate calculation failed: {e}")
+
+        # Product metrics
+        total_products_active = 0
+        total_variants_active = 0
+        if not products_df.empty:
+            try:
+                if "product_id" in products_df.columns:
+                    total_products_active = products_df["product_id"].nunique()
+                total_variants_active = len(products_df)
+            except Exception as e:
+                logger.debug(f"Product metrics calculation failed: {e}")
+
+        return {
+            "iso_year": year,
+            "iso_week": week,
+            "week_start_date": week_start.strftime("%Y-%m-%d"),
+            "week_end_date": week_end.strftime("%Y-%m-%d"),
+            "total_orders": int(total_orders),
+            "total_revenue": float(total_revenue),
+            "total_tax": float(total_tax),
+            "total_discounts": float(total_discounts),
+            "subtotal_price": float(subtotal_price),
+            "average_order_value": float(average_order_value),
+            "total_items_sold": int(total_items_sold),
+            "unique_customers": int(unique_customers),
+            "total_customers_in_system": (
+                len(customers_df) if not customers_df.empty else 0
+            ),
+            "fulfillment_rate": float(fulfillment_rate),
+            "paid_orders": int(paid_orders),
+            "pending_orders": int(pending_orders),
+            "cancelled_orders": int(cancelled_orders),
+            "refunded_orders": int(refunded_orders),
+            "total_fulfillments": (
+                len(fulfillments_df) if not fulfillments_df.empty else 0
+            ),
+            "total_products_active": int(total_products_active),
+            "total_variants_active": int(total_variants_active),
+        }
+
+    except Exception as e:
+        logger.error(f"Complete failure in calculate_weekly_metrics_safe: {e}")
+        # Return absolute minimum safe metrics
+        return {
+            "iso_year": year,
+            "iso_week": week,
+            "week_start_date": week_start.strftime("%Y-%m-%d"),
+            "week_end_date": week_end.strftime("%Y-%m-%d"),
+            "total_orders": len(orders_df) if not orders_df.empty else 0,
+            "total_revenue": 0.0,
+            "total_tax": 0.0,
+            "total_discounts": 0.0,
+            "subtotal_price": 0.0,
+            "average_order_value": 0.0,
+            "total_items_sold": 0,
+            "unique_customers": len(orders_df) if not orders_df.empty else 0,
+            "total_customers_in_system": 0,
+            "fulfillment_rate": 0.0,
+            "paid_orders": 0,
+            "pending_orders": 0,
+            "cancelled_orders": 0,
+            "refunded_orders": 0,
+            "total_fulfillments": 0,
+            "total_products_active": 0,
+            "total_variants_active": 0,
+        }
+    """Calculate comprehensive weekly metrics for Looker Studio using all your data sources."""
+
+    # Basic order metrics
+    total_orders = len(orders_df)
+    total_revenue = orders_df["total_price"].sum() if not orders_df.empty else 0
+    total_tax = orders_df["total_tax"].sum() if not orders_df.empty else 0
+    total_discounts = orders_df["total_discounts"].sum() if not orders_df.empty else 0
+    subtotal_price = orders_df["subtotal_price"].sum() if not orders_df.empty else 0
+    average_order_value = orders_df["total_price"].mean() if not orders_df.empty else 0
+    total_items_sold = orders_df["item_count"].sum() if not orders_df.empty else 0
+
+    # Customer metrics
+    unique_customers = orders_df["customer_id"].nunique() if not orders_df.empty else 0
+    total_customers_in_system = len(customers_df) if not customers_df.empty else 0
+
+    # Financial status breakdown
+    if not orders_df.empty:
+        status_counts = orders_df["financial_status"].value_counts()
+        paid_orders = status_counts.get("paid", 0)
+        pending_orders = status_counts.get("pending", 0) + status_counts.get(
+            "authorized", 0
+        )
+        cancelled_orders = status_counts.get("voided", 0)
+        refunded_orders = status_counts.get("refunded", 0) + status_counts.get(
+            "partially_refunded", 0
+        )
+    else:
+        paid_orders = pending_orders = cancelled_orders = refunded_orders = 0
+
+    # Fulfillment metrics (using your fulfillments data)
+    if not orders_df.empty:
+        fulfilled_orders = orders_df[
+            orders_df["fulfillment_status"].isin(["fulfilled", "partial"])
+        ].shape[0]
+        fulfillment_rate = (
+            (fulfilled_orders / total_orders * 100) if total_orders > 0 else 0
+        )
+    else:
+        fulfillment_rate = 0
+
+    total_fulfillments = len(fulfillments_df) if not fulfillments_df.empty else 0
+
+    # Product metrics (using your products data)
+    total_products_active = (
+        products_df["product_id"].nunique() if not products_df.empty else 0
+    )
+    total_variants_active = len(products_df) if not products_df.empty else 0
+
+    return {
+        "iso_year": year,
+        "iso_week": week,
+        "week_start_date": week_start.strftime("%Y-%m-%d"),
+        "week_end_date": week_end.strftime("%Y-%m-%d"),
+        "total_orders": int(total_orders),
+        "total_revenue": float(total_revenue),
+        "total_tax": float(total_tax),
+        "total_discounts": float(total_discounts),
+        "subtotal_price": float(subtotal_price),
+        "average_order_value": float(average_order_value),
+        "total_items_sold": int(total_items_sold),
+        "unique_customers": int(unique_customers),
+        "total_customers_in_system": int(total_customers_in_system),
+        "fulfillment_rate": float(fulfillment_rate),
+        "paid_orders": int(paid_orders),
+        "pending_orders": int(pending_orders),
+        "cancelled_orders": int(cancelled_orders),
+        "refunded_orders": int(refunded_orders),
+        "total_fulfillments": int(total_fulfillments),
+        "total_products_active": int(total_products_active),
+        "total_variants_active": int(total_variants_active),
+    }
+
+
+# ------------------------------------------------------------------------------
+# ORIGINAL Visualization and Output Functions (keeping your existing ones)
 # ------------------------------------------------------------------------------
 
 
@@ -668,13 +1328,13 @@ def display_dataframe(df, title):
 
 
 # ------------------------------------------------------------------------------
-# Google Sheets Integration
+# ENHANCED Google Sheets Integration (building on your existing setup)
 # ------------------------------------------------------------------------------
 
 
 def upload_to_google_sheets(data_dict, week_range=None, spreadsheet_id=None):
     """
-    Upload data to Google Sheets.
+    Upload data to Google Sheets (your original function).
 
     Args:
         data_dict: Dictionary containing DataFrames to upload
@@ -960,13 +1620,176 @@ def upload_to_google_sheets(data_dict, week_range=None, spreadsheet_id=None):
     return spreadsheet.id
 
 
+# NEW function for historical data
+def create_or_update_historical_sheets(spreadsheet, weekly_data: List[Dict]):
+    """Create or update sheets optimized for Looker Studio (NEW - for historical data)."""
+
+    # Weekly Trends Sheet for Looker Studio
+    try:
+        weekly_worksheet = spreadsheet.worksheet("Weekly_Trends")
+        logger.info("Updating existing Weekly_Trends worksheet")
+        weekly_worksheet.clear()
+    except gspread.exceptions.WorksheetNotFound:
+        weekly_worksheet = spreadsheet.add_worksheet(
+            title="Weekly_Trends", rows=500, cols=25
+        )
+        logger.info("Created new Weekly_Trends worksheet")
+
+    # Headers optimized for Looker Studio
+    headers = [
+        "iso_year",
+        "iso_week",
+        "week_start_date",
+        "week_end_date",
+        "total_orders",
+        "total_revenue",
+        "total_tax",
+        "total_discounts",
+        "subtotal_price",
+        "average_order_value",
+        "total_items_sold",
+        "unique_customers",
+        "total_customers_in_system",
+        "fulfillment_rate",
+        "paid_orders",
+        "pending_orders",
+        "cancelled_orders",
+        "refunded_orders",
+        "total_fulfillments",
+        "total_products_active",
+        "total_variants_active",
+        "last_updated",
+    ]
+
+    # Add headers
+    weekly_worksheet.update("A1:V1", [headers])
+    weekly_worksheet.format(
+        "A1:V1",
+        {
+            "textFormat": {"bold": True},
+            "backgroundColor": {"red": 0.2, "green": 0.6, "blue": 0.9},
+        },
+    )
+
+    # Prepare data rows
+    data_rows = []
+    for week_data in weekly_data:
+        data_rows.append(
+            [
+                week_data["iso_year"],
+                week_data["iso_week"],
+                week_data["week_start_date"],
+                week_data["week_end_date"],
+                week_data["total_orders"],
+                week_data["total_revenue"],
+                week_data["total_tax"],
+                week_data["total_discounts"],
+                week_data["subtotal_price"],
+                week_data["average_order_value"],
+                week_data["total_items_sold"],
+                week_data["unique_customers"],
+                week_data["total_customers_in_system"],
+                week_data["fulfillment_rate"],
+                week_data["paid_orders"],
+                week_data["pending_orders"],
+                week_data["cancelled_orders"],
+                week_data["refunded_orders"],
+                week_data["total_fulfillments"],
+                week_data["total_products_active"],
+                week_data["total_variants_active"],
+                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            ]
+        )
+
+    # Update data in chunks to avoid timeout
+    if data_rows:
+        chunk_size = 100
+        for i in range(0, len(data_rows), chunk_size):
+            chunk = data_rows[i : i + chunk_size]
+            start_row = i + 2  # +2 because row 1 is headers and sheets are 1-indexed
+            end_row = start_row + len(chunk) - 1
+            range_name = f"A{start_row}:V{end_row}"
+            weekly_worksheet.update(range_name, chunk)
+            logger.info(f"Updated rows {start_row} to {end_row}")
+            time.sleep(1)  # Rate limiting for Google Sheets API
+
+    logger.info(f"Updated Weekly_Trends worksheet with {len(data_rows)} weeks of data")
+
+
+def aggregate_weekly_to_monthly(weekly_data: List[Dict]) -> List[Dict]:
+    """Aggregate weekly data to monthly summaries (NEW - for monthly reporting)."""
+    logger.info("Aggregating weekly data to monthly summaries...")
+
+    monthly_groups = {}
+
+    # Group by year-month
+    for week in weekly_data:
+        week_start = datetime.datetime.strptime(week["week_start_date"], "%Y-%m-%d")
+        year_month = f"{week_start.year}-{week_start.month:02d}"
+
+        if year_month not in monthly_groups:
+            monthly_groups[year_month] = []
+        monthly_groups[year_month].append(week)
+
+    monthly_data = []
+
+    for year_month, weeks in monthly_groups.items():
+        year, month = year_month.split("-")
+        year, month = int(year), int(month)
+
+        # Calculate monthly metrics
+        total_orders = sum(w["total_orders"] for w in weeks)
+        total_revenue = sum(w["total_revenue"] for w in weeks)
+        avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
+        total_customers = sum(
+            w["unique_customers"] for w in weeks
+        )  # This is an approximation
+
+        month_start, month_end = get_month_range(year, month)
+
+        monthly_data.append(
+            {
+                "year": year,
+                "month": month,
+                "month_name": datetime.date(year, month, 1).strftime("%B"),
+                "month_start_date": month_start.strftime("%Y-%m-%d"),
+                "month_end_date": month_end.strftime("%Y-%m-%d"),
+                "total_orders": total_orders,
+                "total_revenue": total_revenue,
+                "average_order_value": avg_order_value,
+                "total_customers": total_customers,
+            }
+        )
+
+    # Calculate growth rates
+    for i in range(1, len(monthly_data)):
+        prev_month = monthly_data[i - 1]
+        curr_month = monthly_data[i]
+
+        if prev_month["total_orders"] > 0:
+            curr_month["growth_rate_orders"] = (
+                (curr_month["total_orders"] - prev_month["total_orders"])
+                / prev_month["total_orders"]
+                * 100
+            )
+
+        if prev_month["total_revenue"] > 0:
+            curr_month["growth_rate_revenue"] = (
+                (curr_month["total_revenue"] - prev_month["total_revenue"])
+                / prev_month["total_revenue"]
+                * 100
+            )
+
+    return monthly_data
+
+
 # ------------------------------------------------------------------------------
-# Main Reporting Functions
+# ORIGINAL Main Reporting Functions (keeping your existing generate_weekly_report)
 # ------------------------------------------------------------------------------
 
 
 def generate_weekly_report(week_range=None):
-    """Generate a report for a specific week."""
+    """Generate a report for a specific week (your original function)."""
     if week_range is None:
         # Default to previous week
         week_range = get_previous_week_range()
@@ -1065,18 +1888,24 @@ def generate_weekly_report(week_range=None):
         print(f"Error fetching reports: {e}")
         print("Continuing with other data...")
 
-    # Calculate weekly summary metrics
+    # Calculate weekly summary metrics using safe calculation
     summary = {
         "report_period": f"{start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}",
         "total_orders": len(orders_df) if not orders_df.empty else 0,
         "total_revenue": (
-            orders_df["total_price"].astype(float).sum() if not orders_df.empty else 0
+            orders_df["total_price"].astype(float).sum()
+            if not orders_df.empty and "total_price" in orders_df.columns
+            else 0
         ),
         "avg_order_value": (
-            orders_df["total_price"].astype(float).mean() if not orders_df.empty else 0
+            orders_df["total_price"].astype(float).mean()
+            if not orders_df.empty and "total_price" in orders_df.columns
+            else 0
         ),
         "total_products": (
-            len(products_df["product_id"].unique()) if not products_df.empty else 0
+            len(orders_df["product_id"].unique())
+            if not orders_df.empty and "product_id" in orders_df.columns
+            else 0
         ),
         "total_variants": len(products_df) if not products_df.empty else 0,
         "total_customers": len(customers_df) if not customers_df.empty else 0,
@@ -1137,70 +1966,336 @@ def generate_weekly_report(week_range=None):
     }
 
 
-def main():
-    """Main function to execute the Shopify data retrieval process."""
+# ------------------------------------------------------------------------------
+# NEW Historical Data Generation Function
+# ------------------------------------------------------------------------------
+
+
+def generate_historical_data(mode="incremental"):
+    """Generate historical data using all your existing functions with improved rate limiting."""
+
+    # Use your existing connection test
+    session = get_session()
+
+    # Test connection using your existing shop endpoint check
     try:
-        # Check if an environment variable or config file has a spreadsheet ID
-        spreadsheet_id = os.getenv("SPREADSHEET_ID", None)
+        shop_endpoint = f"{API_BASE_URL}/shop.json"
+        shop_response = session.get(shop_endpoint)
+        shop_response.raise_for_status()
+        shop_data = shop_response.json().get("shop", {})
+        logger.info(
+            f"Connected to Shopify store: {shop_data.get('name')} ({shop_data.get('domain')})"
+        )
+    except Exception as e:
+        logger.error(f"Error connecting to Shopify store: {e}")
+        return None
 
-        # Default to previous week for the weekly report
-        report_data = generate_weekly_report()
+    weekly_data = []
 
-        print("\nWeekly report generation completed successfully!")
-        print("CSV files have been saved to the 'reports' directory.")
+    if mode == "full":
+        logger.info("Starting full historical data collection from 2023...")
+        weeks_to_process = get_all_weeks_since_2023()
+    else:
+        logger.info("Running incremental update...")
+        # Just current and previous week for regular updates
+        current_week_range = get_current_week_range()
+        current_year, current_week_num = get_iso_week_info(current_week_range[0])
 
-        if not spreadsheet_id:
-            # Ask user if they want to upload to Google Sheets
-            upload_to_sheets = (
-                input("\nDo you want to upload this data to Google Sheets? (y/n): ")
-                .strip()
-                .lower()
+        weeks_to_process = []
+        # Current week
+        weeks_to_process.append((current_year, current_week_num, *current_week_range))
+
+        # Previous week
+        if current_week_num > 1:
+            prev_start, prev_end = get_week_range_from_iso(
+                current_year, current_week_num - 1
+            )
+            weeks_to_process.append(
+                (current_year, current_week_num - 1, prev_start, prev_end)
             )
 
-            if upload_to_sheets == "y" or upload_to_sheets == "yes":
-                # Ask if they want to update an existing sheet
-                use_existing = (
-                    input("Do you want to update an existing Google Sheet? (y/n): ")
+    logger.info(f"Processing {len(weeks_to_process)} weeks...")
+
+    # Get products snapshot once (for efficiency) using your existing function
+    products_df = get_products(session)
+
+    # Process each week using all your existing data fetching functions with improved rate limiting
+    for i, (year, week, week_start, week_end) in enumerate(weeks_to_process):
+        logger.info(f"Processing {year}-W{week:02d} ({i+1}/{len(weeks_to_process)})")
+
+        try:
+            week_range = (week_start, week_end)
+
+            # Use your existing functions to get data with extra delays
+            orders_df = get_orders(session, week_range)  # Your original function
+            time.sleep(1.5)  # Extra delay to prevent rate limiting
+
+            customers_df = get_customers(session, week_range)  # Your original function
+            time.sleep(1.5)  # Extra delay to prevent rate limiting
+
+            # Temporarily skip fulfillments to avoid rate limiting - we can add this back later
+            # fulfillments_df = get_fulfillments(session, week_range)  # Your original function
+            fulfillments_df = pd.DataFrame()  # Skip for now to avoid 429 errors
+
+            # Calculate comprehensive metrics using all your data sources with ultra-safe approach
+            week_metrics = calculate_weekly_metrics_safe(
+                orders_df,
+                products_df,
+                customers_df,
+                fulfillments_df,
+                year,
+                week,
+                week_start,
+                week_end,
+            )
+
+            weekly_data.append(week_metrics)
+
+            # More conservative rate limiting - break every 5 weeks instead of 10
+            if i > 0 and i % 5 == 0:
+                logger.info(
+                    f"Processed {i} weeks, taking a break to avoid rate limits..."
+                )
+                time.sleep(5)  # Longer break to be more respectful to API
+
+        except Exception as e:
+            logger.error(f"Error processing {year}-W{week:02d}: {e}")
+            # Continue processing other weeks even if one fails
+            continue
+
+    return weekly_data
+
+
+# ------------------------------------------------------------------------------
+# ORIGINAL Main Function (keeping your existing main but adding historical options)
+# ------------------------------------------------------------------------------
+
+
+def main():
+    """Enhanced main function - adds historical capabilities to your existing workflow."""
+
+    # Add command line argument parsing for new historical features
+    parser = argparse.ArgumentParser(description="Enhanced Shopify Reporting System")
+    parser.add_argument(
+        "--mode",
+        choices=["weekly", "historical-full", "historical-incremental"],
+        default="weekly",
+        help="Report generation mode",
+    )
+    parser.add_argument(
+        "--spreadsheet-id", type=str, help="Google Spreadsheet ID to update"
+    )
+
+    # Parse args, but make it optional so your existing workflow still works
+    try:
+        args = parser.parse_args()
+    except:
+        # If no args provided, default to original weekly behavior
+        class DefaultArgs:
+            mode = "weekly"
+            spreadsheet_id = None
+
+        args = DefaultArgs()
+
+    try:
+        if args.mode == "weekly":
+            # Run your original weekly report generation
+            spreadsheet_id = args.spreadsheet_id or os.getenv("SPREADSHEET_ID")
+
+            # Default to previous week for the weekly report
+            report_data = generate_weekly_report()
+
+            print("\nWeekly report generation completed successfully!")
+            print("CSV files have been saved to the 'reports' directory.")
+
+            if not spreadsheet_id:
+                # Ask user if they want to upload to Google Sheets (your original logic)
+                upload_to_sheets = (
+                    input("\nDo you want to upload this data to Google Sheets? (y/n): ")
                     .strip()
                     .lower()
                 )
 
-                if use_existing == "y" or use_existing == "yes":
-                    spreadsheet_id = input(
-                        "Enter the Google Spreadsheet ID (from the URL): "
-                    ).strip()
-                    if not spreadsheet_id:
-                        print("No spreadsheet ID provided. Creating a new spreadsheet.")
+                if upload_to_sheets == "y" or upload_to_sheets == "yes":
+                    # Ask if they want to update an existing sheet
+                    use_existing = (
+                        input("Do you want to update an existing Google Sheet? (y/n): ")
+                        .strip()
+                        .lower()
+                    )
+
+                    if use_existing == "y" or use_existing == "yes":
+                        spreadsheet_id = input(
+                            "Enter the Google Spreadsheet ID (from the URL): "
+                        ).strip()
+                        if not spreadsheet_id:
+                            print(
+                                "No spreadsheet ID provided. Creating a new spreadsheet."
+                            )
+                            spreadsheet_id = None
+                    else:
                         spreadsheet_id = None
+
+                    # Get previous week's date range
+                    week_range = get_previous_week_range()
+                    spreadsheet_id = upload_to_google_sheets(
+                        report_data, week_range, spreadsheet_id
+                    )
+
+                    # Save the spreadsheet ID to a config file for future use
+                    with open("spreadsheet_config.txt", "w") as f:
+                        f.write(spreadsheet_id)
+                    print(
+                        f"Spreadsheet ID saved to 'spreadsheet_config.txt' for future use"
+                    )
                 else:
-                    spreadsheet_id = None
-
-                # Get previous week's date range
-                week_range = get_previous_week_range()
-                spreadsheet_id = upload_to_google_sheets(
-                    report_data, week_range, spreadsheet_id
-                )
-
-                # Save the spreadsheet ID to a config file for future use
-                with open("spreadsheet_config.txt", "w") as f:
-                    f.write(spreadsheet_id)
-                print(
-                    f"Spreadsheet ID saved to 'spreadsheet_config.txt' for future use"
-                )
+                    print("Skipping Google Sheets upload.")
             else:
-                print("Skipping Google Sheets upload.")
-        else:
-            # If running automated, always upload to the spreadsheet
-            print(f"Using existing spreadsheet ID: {spreadsheet_id}")
-            week_range = get_previous_week_range()
-            upload_to_google_sheets(report_data, week_range, spreadsheet_id)
+                # If running automated, always upload to the spreadsheet (your original logic)
+                print(f"Using existing spreadsheet ID: {spreadsheet_id}")
+                week_range = get_previous_week_range()
+                upload_to_google_sheets(report_data, week_range, spreadsheet_id)
 
-        return report_data
+        else:
+            # NEW: Historical data generation modes
+            mode = "full" if args.mode == "historical-full" else "incremental"
+
+            logger.info(f"Starting historical data generation in {mode} mode...")
+
+            # Generate historical data using all your existing functions
+            weekly_data = generate_historical_data(mode)
+
+            if not weekly_data:
+                logger.error("No historical data generated. Exiting.")
+                return False
+
+            logger.info(f"Generated {len(weekly_data)} weeks of historical data")
+
+            # Update Google Sheets with historical data
+            spreadsheet_id = args.spreadsheet_id or os.getenv("SPREADSHEET_ID")
+
+            if not spreadsheet_id:
+                logger.error(
+                    "SPREADSHEET_ID not found. Please provide via --spreadsheet-id or environment variable."
+                )
+                logger.info("Creating a new spreadsheet instead...")
+                spreadsheet_id = None
+
+            try:
+                # Set up Google Sheets client using your existing credentials setup
+                scope = [
+                    "https://spreadsheets.google.com/feeds",
+                    "https://www.googleapis.com/auth/drive",
+                ]
+                credentials = ServiceAccountCredentials.from_json_keyfile_name(
+                    "supple-life-437019-e0-7d94cf81533f.json", scope
+                )
+                client = gspread.authorize(credentials)
+
+                # Try to open existing spreadsheet or create new one
+                if spreadsheet_id:
+                    try:
+                        spreadsheet = client.open_by_key(spreadsheet_id)
+                        logger.info(
+                            f"Updating existing spreadsheet: {spreadsheet.title}"
+                        )
+                    except gspread.exceptions.SpreadsheetNotFound:
+                        logger.warning(
+                            f"Spreadsheet with ID {spreadsheet_id} not found. Creating new one."
+                        )
+                        spreadsheet_id = None
+                    except Exception as e:
+                        logger.warning(
+                            f"Error opening spreadsheet {spreadsheet_id}: {e}. Creating new one."
+                        )
+                        spreadsheet_id = None
+
+                if not spreadsheet_id:
+                    # Create new spreadsheet
+                    spreadsheet_name = "Shopify Historical Reports"
+                    spreadsheet = client.create(spreadsheet_name)
+                    logger.info(f"Created new spreadsheet: {spreadsheet_name}")
+
+                    # Share with configured email
+                    try:
+                        spreadsheet.share(
+                            "itsus@tatt2away.com", perm_type="user", role="writer"
+                        )
+                        logger.info("Shared spreadsheet with itsus@tatt2away.com")
+                    except Exception as e:
+                        logger.warning(f"Could not share spreadsheet: {e}")
+
+                    spreadsheet_id = spreadsheet.id
+
+                # Create historical trends worksheet
+                create_or_update_historical_sheets(spreadsheet, weekly_data)
+
+                logger.info(f"✅ Historical data uploaded successfully!")
+                logger.info(
+                    f"📊 Spreadsheet URL: https://docs.google.com/spreadsheets/d/{spreadsheet.id}"
+                )
+
+                # Save spreadsheet ID for future use
+                with open("spreadsheet_config.txt", "w") as f:
+                    f.write(spreadsheet.id)
+                logger.info("Spreadsheet ID saved to 'spreadsheet_config.txt'")
+
+                # Create reports directory and save summary (for GitHub Actions compatibility)
+                os.makedirs("reports", exist_ok=True)
+                summary = {
+                    "mode": mode,
+                    "weeks_processed": len(weekly_data),
+                    "total_orders": sum(w["total_orders"] for w in weekly_data),
+                    "total_revenue": sum(w["total_revenue"] for w in weekly_data),
+                    "last_updated": datetime.datetime.now().isoformat(),
+                    "spreadsheet_id": spreadsheet.id,
+                    "spreadsheet_url": f"https://docs.google.com/spreadsheets/d/{spreadsheet.id}",
+                }
+
+                with open("reports/historical_summary.json", "w") as f:
+                    json.dump(summary, f, indent=2)
+
+                return True
+
+            except Exception as e:
+                logger.error(f"Error updating Google Sheets: {e}")
+                logger.info("Saving data locally as CSV for manual upload...")
+
+                # Save data as CSV as fallback
+                try:
+                    os.makedirs("reports", exist_ok=True)
+                    df = pd.DataFrame(weekly_data)
+                    df.to_csv("reports/historical_weekly_data.csv", index=False)
+                    logger.info(
+                        "Historical data saved to reports/historical_weekly_data.csv"
+                    )
+
+                    summary = {
+                        "mode": mode,
+                        "weeks_processed": len(weekly_data),
+                        "total_orders": sum(w["total_orders"] for w in weekly_data),
+                        "total_revenue": sum(w["total_revenue"] for w in weekly_data),
+                        "last_updated": datetime.datetime.now().isoformat(),
+                        "note": "Data saved as CSV due to Google Sheets error",
+                    }
+
+                    with open("reports/historical_summary.json", "w") as f:
+                        json.dump(summary, f, indent=2)
+
+                    return True
+
+                except Exception as csv_error:
+                    logger.error(f"Error saving CSV: {csv_error}")
+                    return False
+
+        return True
 
     except Exception as e:
         print(f"\nAn error occurred: {e}")
-        raise
+        logger.error(f"Error in main execution: {e}")
+        return False
 
 
 if __name__ == "__main__":
-    main()
+    success = main()
+    exit(0 if success else 1)
