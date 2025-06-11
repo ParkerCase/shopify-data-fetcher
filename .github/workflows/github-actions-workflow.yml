@@ -61,7 +61,7 @@ jobs:
           python shopify_reports.py --mode $MODE
 
       - name: Upload reports to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: shopify-reports-${{ github.run_id }}
           path: |
