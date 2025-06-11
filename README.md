@@ -24,15 +24,11 @@ pip install -r requirements.txt
 Create a `.env` file with your Shopify API credentials:
 
 ```
-SHOP_NAME=tatt-2-away.myshopify.com
-API_KEY=8d236638adbd963ec050de036c97d2bc
-PASSWORD=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
-API_VERSION=2025-04
 ```
 
 ### 3. Google Sheets Setup
 
-1. Make sure your Google service account JSON file (`supple-life-437019-e0-7d94cf81533f.json`) is in the project directory
+1. Make sure your Google service account JSON file (``) is in the project directory
 2. The script will create a spreadsheet and share it with your email
 
 ### 4. Running the Script
