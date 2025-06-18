@@ -1358,7 +1358,7 @@ def upload_to_google_sheets(data_dict, week_range=None, spreadsheet_id=None):
 
     # Load credentials from service account file
     credentials = ServiceAccountCredentials.from_json_keyfile_name(
-        "supple-life-437019-e0-7d94cf81533f.json", scope
+        "supple-life-437019-e0-f2c2876fac24.json", scope
     )
 
     # Create gspread client
@@ -1996,16 +1996,22 @@ def generate_historical_data(mode="incremental"):
         logger.info("Starting full historical data collection from 2023...")
         weeks_to_process = get_all_weeks_since_2023()
     else:
-        logger.info("Running incremental update...")
-        # Just current and previous week for regular updates
+        logger.info("Running incremental update with catch-up logic...")
+
+        # Get current week info
         current_week_range = get_current_week_range()
         current_year, current_week_num = get_iso_week_info(current_week_range[0])
 
+        # Calculate the week number for June 1, 2025 (2025-W23)
+        june_1_2025 = datetime.datetime(2025, 6, 1)
+        june_1_year, june_1_week = get_iso_week_info(june_1_2025)
+
         weeks_to_process = []
-        # Current week
+
+        # Add current week
         weeks_to_process.append((current_year, current_week_num, *current_week_range))
 
-        # Previous week
+        # Add previous week
         if current_week_num > 1:
             prev_start, prev_end = get_week_range_from_iso(
                 current_year, current_week_num - 1
@@ -2013,6 +2019,43 @@ def generate_historical_data(mode="incremental"):
             weeks_to_process.append(
                 (current_year, current_week_num - 1, prev_start, prev_end)
             )
+        elif current_year > 2023:  # Handle year boundary
+            prev_year = current_year - 1
+            # Get last week of previous year
+            dec_28 = datetime.date(prev_year, 12, 28)
+            _, last_week_prev_year = get_iso_week_info(
+                datetime.datetime.combine(dec_28, datetime.time.min)
+            )
+            prev_start, prev_end = get_week_range_from_iso(
+                prev_year, last_week_prev_year
+            )
+            weeks_to_process.append(
+                (prev_year, last_week_prev_year, prev_start, prev_end)
+            )
+
+        # CATCH-UP LOGIC: Add missing weeks since June 1, 2025
+        # Start from the week after June 1, 2025 and go up to 2 weeks before current
+        start_catchup_week = june_1_week + 1  # Week after June 1
+        end_catchup_week = current_week_num - 2  # 2 weeks before current
+
+        if start_catchup_week <= end_catchup_week:
+            logger.info(
+                f"Catching up on weeks {start_catchup_week} to {end_catchup_week} of {june_1_year}"
+            )
+            for week in range(start_catchup_week, end_catchup_week + 1):
+                week_start, week_end = get_week_range_from_iso(june_1_year, week)
+                weeks_to_process.append((june_1_year, week, week_start, week_end))
+
+        # Also check if we need to catch up from previous year
+        if june_1_year < current_year:
+            # Add weeks from June 1, 2025 to end of 2025
+            for week in range(june_1_week + 1, 53):  # Up to week 52/53
+                try:
+                    week_start, week_end = get_week_range_from_iso(june_1_year, week)
+                    weeks_to_process.append((june_1_year, week, week_start, week_end))
+                except ValueError:
+                    # Week doesn't exist in this year (e.g., week 53 in non-leap years)
+                    break
 
     logger.info(f"Processing {len(weeks_to_process)} weeks...")
 
@@ -2078,7 +2121,7 @@ def main():
     parser = argparse.ArgumentParser(description="Enhanced Shopify Reporting System")
     parser.add_argument(
         "--mode",
-        choices=["weekly", "historical-full", "historical-incremental"],
+        choices=["weekly", "historical-full", "historical-incremental", "catch-up"],
         default="weekly",
         help="Report generation mode",
     )
@@ -2158,7 +2201,13 @@ def main():
 
         else:
             # NEW: Historical data generation modes
-            mode = "full" if args.mode == "historical-full" else "incremental"
+            if args.mode == "catch-up":
+                mode = "incremental"  # Use incremental mode but with catch-up logic
+                logger.info(
+                    "Running in CATCH-UP mode to fill missing weeks since 06-01..."
+                )
+            else:
+                mode = "full" if args.mode == "historical-full" else "incremental"
 
             logger.info(f"Starting historical data generation in {mode} mode...")
 
@@ -2188,7 +2237,7 @@ def main():
                     "https://www.googleapis.com/auth/drive",
                 ]
                 credentials = ServiceAccountCredentials.from_json_keyfile_name(
-                    "supple-life-437019-e0-7d94cf81533f.json", scope
+                    "supple-life-437019-e0-f2c2876fac24.json", scope
                 )
                 client = gspread.authorize(credentials)
 

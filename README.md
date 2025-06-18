@@ -32,7 +32,7 @@ API_VERSION=2025-04
 
 ### 3. Google Sheets Setup
 
-1. Make sure your Google service account JSON file (`supple-life-437019-e0-7d94cf81533f.json`) is in the project directory
+1. Make sure your Google service account JSON file (`supple-life-437019-e0-f2c2876fac24.json`) is in the project directory
 2. The script will create a spreadsheet and share it with your email
 
 ### 4. Running the Script

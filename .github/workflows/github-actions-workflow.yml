@@ -3,7 +3,7 @@ name: Weekly Shopify Report
 on:
   schedule:
     # Run every Monday at 7 AM UTC (12 AM Mountain Time in winter, 1 AM in summer)
-    - cron: "0 7 * * 1" # Fixed: added space before 1
+    - cron: "0 7 * * 1"
 
   # Allow manual trigger from GitHub UI
   workflow_dispatch:
@@ -11,12 +11,13 @@ on:
       mode:
         description: "Run mode"
         required: true
-        default: "historical-incremental"
+        default: "catch-up"
         type: choice
         options:
           - weekly
           - historical-incremental
           - historical-full
+          - catch-up
 
 jobs:
   generate_report:
@@ -24,12 +25,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4 # Updated to v4
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.11" # Updated to 3.11
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -46,22 +47,56 @@ jobs:
 
       - name: Create service account key file
         run: |
-          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > supple-life-437019-e0-7d94cf81533f.json
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}' > supple-life-437019-e0-f2c2876fac24.json
+
+      - name: Check for existing spreadsheet ID
+        id: spreadsheet_check
+        run: |
+          if [ -f "spreadsheet_config.txt" ]; then
+            echo "Found existing spreadsheet ID in config file"
+            echo "spreadsheet_id=$(cat spreadsheet_config.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "No existing spreadsheet ID found, will use environment variable"
+            echo "spreadsheet_id=${{ secrets.SPREADSHEET_ID }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Run Enhanced Shopify Historical Report
         run: |
-          # Use historical-incremental for scheduled runs, allow manual mode selection
+          # Use catch-up mode for scheduled runs to ensure missing weeks are filled
           if [ "${{ github.event_name }}" = "schedule" ]; then
-            MODE="historical-incremental"
+            MODE="catch-up"
           else
-            MODE="${{ github.event.inputs.mode || 'historical-incremental' }}"
+            MODE="${{ github.event.inputs.mode || 'catch-up' }}"
           fi
 
           echo "Running in mode: $MODE"
-          python shopify_reports.py --mode $MODE
+          echo "Using spreadsheet ID: ${{ steps.spreadsheet_check.outputs.spreadsheet_id }}"
+
+          # Set the spreadsheet ID as environment variable for the script
+          export SPREADSHEET_ID="${{ steps.spreadsheet_check.outputs.spreadsheet_id }}"
+
+          # Run with verbose logging
+          python shopify_reports.py --mode $MODE --spreadsheet-id "${{ steps.spreadsheet_check.outputs.spreadsheet_id }}"
+
+      - name: Verify Google Sheets Update
+        run: |
+          echo "Checking if Google Sheets was updated..."
+          if [ -f "reports/historical_summary.json" ]; then
+            echo "✅ Historical summary found:"
+            cat reports/historical_summary.json
+          else
+            echo "❌ No historical summary found - Google Sheets update may have failed"
+            exit 1
+          fi
+
+          if [ -f "spreadsheet_config.txt" ]; then
+            echo "✅ Spreadsheet ID saved: $(cat spreadsheet_config.txt)"
+          else
+            echo "❌ Spreadsheet ID not saved - this may cause future issues"
+          fi
 
       - name: Upload reports to artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: shopify-reports-${{ github.run_id }}
           path: |
@@ -79,8 +114,13 @@ jobs:
             cat reports/historical_summary.json
           fi
 
+          # Check if we need to catch up on missing weeks
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.mode }}" = "historical-incremental" ]; then
+            echo "⚠️  Note: You ran in incremental mode. If you're missing weeks since 06-01, run with 'catch-up' mode to fill the gaps."
+          fi
+
       - name: Clean up credentials
         if: always()
         run: |
-          rm -f supple-life-437019-e0-7d94cf81533f.json
+          rm -f supple-life-437019-e0-f2c2876fac24.json
           rm -f .env

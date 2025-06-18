@@ -1,0 +1,4 @@
+iso_year,iso_week,week_start_date,week_end_date,total_orders,total_revenue,total_tax,total_discounts,subtotal_price,average_order_value,total_items_sold,unique_customers,total_customers_in_system,fulfillment_rate,paid_orders,pending_orders,cancelled_orders,refunded_orders,total_fulfillments,total_products_active,total_variants_active
+2025,25,2025-06-16,2025-06-22,0,0.0,0.0,0.0,0.0,0.0,0,0,0,0.0,0,0,0,0,0,16,33
+2025,24,2025-06-09,2025-06-15,3,735.0,0.0,484.9,735.0,245.0,7,3,3,0.0,3,0,0,0,0,16,33
+2025,23,2025-06-02,2025-06-08,1,342.5,0.0,0.0,342.5,342.5,2,1,1,0.0,1,0,0,0,0,16,33
